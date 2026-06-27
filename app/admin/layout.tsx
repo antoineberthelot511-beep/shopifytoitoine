@@ -19,6 +19,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               Produits
             </Link>
+            <Link
+              href="/admin/leads"
+              className="text-gray-600 transition hover:text-black"
+            >
+              Leads
+            </Link>
           </nav>
         </div>
       </header>
