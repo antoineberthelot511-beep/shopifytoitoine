@@ -12,24 +12,25 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { client_email, nom, offre } = await request.json()
+  const { client_id, nom, offre } = await request.json()
 
-  const { data: profile, error: profileError } = await supabaseAdmin
-    .from('profiles')
-    .select('id')
-    .eq('email', client_email)
-    .single()
+  // Récupère le user auth pour obtenir email + métadonnées
+  const { data: { user }, error: userError } = await supabaseAdmin.auth.admin.getUserById(client_id)
 
-  if (profileError || !profile) {
-    return NextResponse.json(
-      { error: 'Client introuvable. Il doit d\'abord créer un compte.' },
-      { status: 404 }
-    )
+  if (userError || !user) {
+    return NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 404 })
   }
+
+  // Crée le profil à la volée si inexistant
+  await supabaseAdmin.from('profiles').upsert({
+    id: user.id,
+    email: user.email,
+    prenom: (user.user_metadata?.prenom as string | undefined) ?? '',
+  })
 
   const { data, error } = await supabaseAdmin
     .from('projects')
-    .insert({ client_id: profile.id, nom, offre, statut: 'En attente' })
+    .insert({ client_id: user.id, nom, offre, statut: 'En attente' })
     .select()
     .single()
 

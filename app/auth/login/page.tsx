@@ -35,7 +35,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4 relative">
+      <Link href="/landing" className="absolute top-4 left-4 text-xs text-white/30 hover:text-white/60 transition">
+        ← Accueil
+      </Link>
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
           <span className="text-3xl font-bold text-[#7c3aed]">Σ</span>

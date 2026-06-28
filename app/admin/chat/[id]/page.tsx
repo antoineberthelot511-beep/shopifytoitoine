@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, use } from 'react'
 import Link from 'next/link'
+import { supabase } from '@/lib/supabase'
 
 const ETAPES_ORDER = ['Paiement reçu', 'En construction', 'En test', 'Livré']
 const STATUTS = ['En attente', 'En cours', 'En test', 'Livré', 'Annulé']
@@ -32,6 +33,7 @@ export default function AdminChatPage({ params }: { params: Promise<{ id: string
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const lastMessageId = useRef<string | null>(null)
+  const isFirstScroll = useRef(true)
 
   useEffect(() => {
     async function load() {
@@ -42,7 +44,7 @@ export default function AdminChatPage({ params }: { params: Promise<{ id: string
 
       if (projRes.ok) setProject(await projRes.json())
       if (msgsRes.ok) {
-        const msgs = await msgsRes.json()
+        const msgs: Message[] = await msgsRes.json()
         setMessages(msgs)
         if (msgs.length > 0) lastMessageId.current = msgs[msgs.length - 1].id
       }
@@ -51,7 +53,28 @@ export default function AdminChatPage({ params }: { params: Promise<{ id: string
     load()
   }, [id])
 
-  // Poll for new messages every 2 seconds
+  // Realtime : supabase anon key pour les subscriptions
+  useEffect(() => {
+    const channel = supabase
+      .channel(`admin-project-${id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `project_id=eq.${id}` },
+        payload => {
+          const newMsg = payload.new as Message
+          setMessages(prev => {
+            if (prev.some(m => m.id === newMsg.id)) return prev
+            lastMessageId.current = newMsg.id
+            return [...prev, newMsg]
+          })
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [id])
+
+  // Poll toutes les 3s en complément du realtime (fallback RLS admin)
   useEffect(() => {
     const interval = setInterval(async () => {
       const res = await fetch(`/api/admin/projects/${id}/messages`)
@@ -61,17 +84,21 @@ export default function AdminChatPage({ params }: { params: Promise<{ id: string
         setMessages(msgs)
         lastMessageId.current = msgs[msgs.length - 1].id
       }
-    }, 2000)
+    }, 3000)
 
     return () => clearInterval(interval)
   }, [id])
 
+  // Scroll : instant au chargement initial, smooth pour les nouveaux messages
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (!bottomRef.current) return
+    bottomRef.current.scrollIntoView({
+      behavior: isFirstScroll.current ? 'instant' : 'smooth',
+    })
+    isFirstScroll.current = false
   }, [messages])
 
-  async function sendMessage(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSend() {
     if (!content.trim() || sending) return
 
     const text = content.trim()
@@ -85,13 +112,23 @@ export default function AdminChatPage({ params }: { params: Promise<{ id: string
     })
 
     if (res.ok) {
-      const msg = await res.json()
-      setMessages(prev => [...prev, msg])
+      const msg: Message = await res.json()
+      setMessages(prev => {
+        if (prev.some(m => m.id === msg.id)) return prev
+        return [...prev, msg]
+      })
       lastMessageId.current = msg.id
     }
 
     setSending(false)
     inputRef.current?.focus()
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
   }
 
   async function updateStatut(statut: string) {
@@ -126,6 +163,8 @@ export default function AdminChatPage({ params }: { params: Promise<{ id: string
     )
   }
 
+  const clientPrenom = project?.profiles?.prenom || 'Client'
+
   return (
     <div className="h-screen bg-[#0a0a0a] text-white flex flex-col overflow-hidden">
       {/* Header */}
@@ -137,9 +176,9 @@ export default function AdminChatPage({ params }: { params: Promise<{ id: string
           <div className="flex-1 min-w-0">
             <h1 className="font-semibold truncate">
               {project?.nom}
-              {project?.profiles?.prenom && (
+              {clientPrenom && (
                 <span className="text-white/40 font-normal text-sm ml-2">
-                  · {project.profiles.prenom}
+                  · {clientPrenom}
                 </span>
               )}
             </h1>
@@ -184,52 +223,55 @@ export default function AdminChatPage({ params }: { params: Promise<{ id: string
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-5 py-5">
-        <div className="max-w-5xl mx-auto space-y-2">
+        <div className="max-w-5xl mx-auto space-y-3">
           {messages.length === 0 && (
             <p className="text-center text-white/25 text-sm py-10">
               Aucun message pour l'instant.
             </p>
           )}
-          {messages.map(msg => (
-            <div
-              key={msg.id}
-              className={`flex ${msg.sender_role === 'admin' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[72%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                  msg.sender_role === 'admin'
-                    ? 'bg-[#7c3aed] text-white rounded-br-md'
-                    : 'bg-white/10 text-white/90 rounded-bl-md'
-                }`}
-              >
-                {msg.content}
+          {messages.map(msg => {
+            const isAdmin = msg.sender_role === 'admin'
+            const senderName = isAdmin ? 'Sigma Shop' : clientPrenom
+            return (
+              <div key={msg.id} className={`flex flex-col gap-1 ${isAdmin ? 'items-end' : 'items-start'}`}>
+                <span className="text-[10px] text-white/30 px-1">{senderName}</span>
+                <div
+                  className={`max-w-[72%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                    isAdmin
+                      ? 'bg-[#7c3aed] text-white rounded-br-md'
+                      : 'bg-white/10 text-white/90 rounded-bl-md'
+                  }`}
+                >
+                  {msg.content}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
           <div ref={bottomRef} />
         </div>
       </div>
 
       {/* Input */}
-      <form onSubmit={sendMessage} className="border-t border-white/10 px-5 py-3 shrink-0">
+      <div className="border-t border-white/10 px-5 py-3 shrink-0">
         <div className="max-w-5xl mx-auto flex gap-2">
           <input
             ref={inputRef}
             type="text"
             value={content}
             onChange={e => setContent(e.target.value)}
-            placeholder="Message au client..."
+            onKeyDown={handleKeyDown}
+            placeholder="Message au client... (Entrée pour envoyer)"
             className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/25 focus:outline-none focus:border-[#7c3aed] text-sm transition"
           />
           <button
-            type="submit"
+            onClick={handleSend}
             disabled={!content.trim() || sending}
             className="bg-[#7c3aed] px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[#6d28d9] transition disabled:opacity-30 shrink-0"
           >
             Envoyer
           </button>
         </div>
-      </form>
+      </div>
     </div>
   )
 }

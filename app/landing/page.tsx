@@ -244,9 +244,14 @@ export default function LandingPage() {
               <li key={href}><a href={href} className="hover:text-white transition-colors">{label}</a></li>
             ))}
           </ul>
-          <a href="#pricing" className={`${shimmerBtn} hidden md:inline-flex bg-violet-600 hover:bg-violet-500 text-white text-sm px-4 py-2 rounded-lg`}>
-            Voir les offres
-          </a>
+          <div className="hidden md:flex items-center gap-3">
+            <a href="/auth/login" className="text-sm px-4 py-2 rounded-lg border border-violet-500 text-violet-400 hover:bg-violet-500/10 transition-colors">
+              Mon espace
+            </a>
+            <a href="#pricing" className={`${shimmerBtn} bg-violet-600 hover:bg-violet-500 text-white text-sm px-4 py-2 rounded-lg`}>
+              Voir les offres
+            </a>
+          </div>
           <button className="md:hidden flex flex-col gap-1.5 p-2" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu">
             <span className={`block h-0.5 w-6 bg-white transition-transform duration-300 ${menuOpen ? 'translate-y-2 rotate-45' : ''}`} />
             <span className={`block h-0.5 w-6 bg-white transition-opacity duration-300 ${menuOpen ? 'opacity-0' : ''}`} />
@@ -264,7 +269,10 @@ export default function LandingPage() {
               {navLinks.map(([href, label]) => (
                 <a key={href} href={href} onClick={() => setMenuOpen(false)} className="hover:text-white transition-colors">{label}</a>
               ))}
-              <a href="#pricing" onClick={() => setMenuOpen(false)} className="mt-2 inline-flex justify-center bg-violet-600 text-white font-semibold py-2 rounded-lg">
+              <a href="/auth/login" onClick={() => setMenuOpen(false)} className="inline-flex justify-center border border-violet-500 text-violet-400 font-semibold py-2 rounded-lg hover:bg-violet-500/10 transition-colors">
+                Mon espace
+              </a>
+              <a href="#pricing" onClick={() => setMenuOpen(false)} className="inline-flex justify-center bg-violet-600 text-white font-semibold py-2 rounded-lg">
                 Voir les offres
               </a>
             </motion.div>
@@ -627,7 +635,10 @@ export default function LandingPage() {
             <a href="#" className="hover:text-white/60 transition-colors">CGV</a>
             <a href="#contact" className="hover:text-white/60 transition-colors">Contact</a>
           </div>
-          <span>© {new Date().getFullYear()} Sigma Shop. Tous droits réservés.</span>
+          <span>
+            © {new Date().getFullYear()} Sigma Shop. Tous droits réservés.{' '}
+            <a href="/admin" className="text-white/10 hover:text-white/30 transition-colors">·</a>
+          </span>
         </div>
       </footer>
 
